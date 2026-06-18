@@ -82,5 +82,10 @@ jobs:
 
       - name: Create git tag
         run: |
-          git tag v${{ steps.semver.outputs.version }}
-          git push origin v${{ steps.semver.outputs.version }}
+          git fetch --tags
+          if git rev-parse "v${{ steps.semver.outputs.version }}" >/dev/null 2>&1; then
+            echo "Tag v${{ steps.semver.outputs.version }} already exists, skipping tag creation."
+          else
+            git tag v${{ steps.semver.outputs.version }}
+            git push origin v${{ steps.semver.outputs.version }}
+          fi

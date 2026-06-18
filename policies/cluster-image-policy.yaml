@@ -1,0 +1,14 @@
+apiVersion: policy.sigstore.dev/v1beta1
+kind: ClusterImagePolicy
+metadata:
+  name: api-image-policy
+spec:
+  images:
+    - glob: "ghcr.io/vanphutin/w10-api*"
+  authorities:
+    - key:
+        data: |
+          -----BEGIN PUBLIC KEY-----
+          MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEUNVP/fjkOOC6vbLMqVUxD2G6sVMr
+          o4acacttO6gr0T+GinrHxBr+5aHNoal4bjiRdkXMMkAfDWVgMnOFExKOBw==
+          -----END PUBLIC KEY-----

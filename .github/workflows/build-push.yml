@@ -52,6 +52,7 @@ jobs:
           tags: |
             type=raw,value=latest
             type=raw,value=${{ steps.semver.outputs.version }}
+            type=raw,value=v${{ steps.semver.outputs.version }}
             type=sha,prefix=v${{ steps.semver.outputs.version }}-
 
       - name: Build and push Docker image
@@ -64,7 +65,7 @@ jobs:
 
       - name: Update rollout.yaml with new version
         run: |
-          sed -i "s|image: ghcr.io/.*/w10-api:.*|image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.semver.outputs.version }}|g" app-api/rollout.yaml
+          sed -i "s|image: ghcr.io/.*/w10-api:.*|image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:v${{ steps.semver.outputs.version }}|g" app-api/rollout.yaml
           sed -i "s|value: \"v.*\"|value: \"v${{ steps.semver.outputs.version }}\"|g" app-api/rollout.yaml
 
       - name: Commit and push version update

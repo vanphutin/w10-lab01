@@ -1,0 +1,24 @@
+# ArgoCD App: Deploy OPA Gatekeeper controller + CRDs via Helm
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: gatekeeper-operator
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+spec:
+  project: default
+  source:
+    repoURL: https://open-policy-agent.github.io/gatekeeper/charts
+    chart: gatekeeper
+    targetRevision: 3.14.0
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: gatekeeper-system
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+    - CreateNamespace=true
+    - ServerSideApply=true

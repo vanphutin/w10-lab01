@@ -1,0 +1,44 @@
+apiVersion: templates.gatekeeper.sh/v1
+kind: ConstraintTemplate
+metadata:
+  name: k8snolatesttag
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  crd:
+    spec:
+      names:
+        kind: K8sNoLatestTag
+  targets:
+    - target: admission.k8s.gatekeeper.sh
+      rego: |
+        package k8snolatesttag
+
+        violation[{"msg": msg}] {
+          container := input.review.object.spec.containers[_]
+          image := container.image
+          is_latest(image)
+          msg := sprintf("Container '%v' is using the forbidden ':latest' tag.", [container.name])
+        }
+
+        is_latest(image) {
+          not contains(image, ":")
+        }
+
+        is_latest(image) {
+          endswith(image, ":latest")
+        }
+---
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: K8sNoLatestTag
+metadata:
+  name: no-latest-tag
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  match:
+    kinds:
+      - apiGroups: [""]
+        kinds: ["Pod"]
+    namespaces:
+      - demo

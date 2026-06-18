@@ -5,17 +5,16 @@ kind: Role
 metadata:
   name: developer
   namespace: demo
-spec:
-  rules:
-  - apiGroups: [""]
-    resources: ["pods", "services", "configmaps", "secrets"]
-    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
-  - apiGroups: ["apps"]
-    resources: ["deployments", "statefulsets", "daemonsets", "replicasets"]
-    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
-  - apiGroups: ["networking.k8s.io"]
-    resources: ["ingresses"]
-    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+rules:
+- apiGroups: [""]
+  resources: ["pods", "services", "configmaps", "secrets"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+- apiGroups: ["apps"]
+  resources: ["deployments", "statefulsets", "daemonsets", "replicasets"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+- apiGroups: ["networking.k8s.io"]
+  resources: ["ingresses"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
 
 ---
 
@@ -24,17 +23,16 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
   name: sre
-spec:
-  rules:
-  - apiGroups: [""]
-    resources: ["pods", "pods/log", "pods/exec", "nodes", "events", "namespaces"]
-    verbs: ["get", "list", "watch", "create", "update", "patch", "delete", "escalate", "bind"]
-  - apiGroups: ["apps"]
-    resources: ["deployments", "statefulsets", "daemonsets"]
-    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
-  - apiGroups: ["argoproj.io"]
-    resources: ["rollouts"]
-    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+rules:
+- apiGroups: [""]
+  resources: ["pods", "pods/log", "pods/exec", "nodes", "events", "namespaces"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete", "escalate", "bind"]
+- apiGroups: ["apps"]
+  resources: ["deployments", "statefulsets", "daemonsets"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+- apiGroups: ["argoproj.io"]
+  resources: ["rollouts"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
 
 ---
 
@@ -43,17 +41,16 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
   name: viewer
-spec:
-  rules:
-  - apiGroups: [""]
-    resources: ["*"]
-    verbs: ["get", "list", "watch"]
-  - apiGroups: ["apps"]
-    resources: ["*"]
-    verbs: ["get", "list", "watch"]
-  - apiGroups: ["networking.k8s.io"]
-    resources: ["*"]
-    verbs: ["get", "list", "watch"]
-  - apiGroups: ["argoproj.io"]
-    resources: ["*"]
-    verbs: ["get", "list", "watch"]
+rules:
+- apiGroups: [""]
+  resources: ["*"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["apps"]
+  resources: ["*"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["networking.k8s.io"]
+  resources: ["*"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["argoproj.io"]
+  resources: ["*"]
+  verbs: ["get", "list", "watch"]

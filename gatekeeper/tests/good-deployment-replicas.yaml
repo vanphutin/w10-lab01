@@ -1,0 +1,22 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: test-good-replicas
+  namespace: demo
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: test-good-replicas
+  template:
+    metadata:
+      labels:
+        app: test-good-replicas
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.25.1
+        resources:
+          limits:
+            cpu: 100m
+            memory: 64Mi

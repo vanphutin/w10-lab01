@@ -1,44 +1,80 @@
+# ==============================================================================
+# FILE: gatekeeper/constraints/k8s-max-replicas.yaml
+# MỤC ĐÍCH: Định nghĩa chính sách chặn đứng bất kỳ Deployment nào trong namespace demo khai báo số lượng replica vượt quá 5.
+#
+# CÂU HỎI MENTOR CÓ THỂ HỎI:
+# 1. Q: Tại sao phải tách biệt `ConstraintTemplate` và `Constraint`?
+#    A: Template định nghĩa logic kiểm tra chung (Rego) và cấu trúc tham số. Constraint áp dụng logic đó cho các đối tượng
+#       cụ thể với các tham số đầu vào khác nhau (ví dụ: namespace demo giới hạn 5 replicas, namespace staging giới hạn 10 replicas).
+# 2. Q: Giải thích cách hoạt động của khối logic Rego `violation` trong tệp này.
+#    A: Nó lấy trường `.spec.replicas` của Deployment đang được deploy và đối chiếu với tham số `.parameters.maxReplicas`.
+#       Nếu replicas > maxReplicas, biểu thức trả về true và kích hoạt vi phạm kèm thông điệp báo lỗi.
+# ==============================================================================
+
+
+# ------------------------------------------
+# PHẦN 1: ĐỊNH NGHĨA KHUÔN MẪU CHÍNH SÁCH (ConstraintTemplate)
+# Khai báo cấu trúc tham số và mã logic Rego dùng để kiểm tra tính hợp lệ
+# ------------------------------------------
 apiVersion: templates.gatekeeper.sh/v1
 kind: ConstraintTemplate
 metadata:
-  name: k8smaxreplicas
+  name: k8smaxreplicas       # Tên của template (chữ thường)
   annotations:
+    # Sync Wave 1: Cần tạo cấu trúc định nghĩa CRD trước ở Wave 1
     argocd.argoproj.io/sync-wave: "1"
 spec:
   crd:
     spec:
       names:
-        kind: K8sMaxReplicas
+        kind: K8sMaxReplicas # Tên Kind mới đại diện cho chính sách này
       validation:
+        # Định nghĩa các tham số đầu vào (Parameters) dùng OpenAPI V3 Schema để validate dữ liệu truyền vào constraint
         openAPIV3Schema:
           type: object
           properties:
-            maxReplicas:
+            maxReplicas:     # Tham số maxReplicas truyền vào dạng số nguyên (integer)
               type: integer
   targets:
     - target: admission.k8s.gatekeeper.sh
+      # Ngôn ngữ Rego thực thi logic kiểm tra manifest
       rego: |
         package k8smaxreplicas
 
+        # Định nghĩa quy tắc vi phạm (violation). Nếu block bên trong violation đúng, 
+        # yêu cầu deploy sẽ bị REJECT kèm thông điệp lỗi (msg).
         violation[{"msg": msg}] {
+          # Lấy ra số lượng replicas khai báo trong spec của Deployment gửi lên
           replicas := input.review.object.spec.replicas
+          # Lấy ra giá trị maxReplicas cấu hình từ tham số đầu vào của Constraint
           max_replicas := input.parameters.maxReplicas
+          # So sánh: Nếu số lượng replicas gửi lên lớn hơn số lượng cho phép -> kích hoạt lỗi vi phạm
           replicas > max_replicas
+          # Định nghĩa chuỗi thông điệp lỗi trả về cho client
           msg := sprintf("Deployment replicas '%v' exceeds maximum allowed limit of '%v'.", [replicas, max_replicas])
         }
 ---
+# ------------------------------------------
+# PHẦN 2: ÁP DỤNG RÀNG BUỘC THỰC TẾ (Constraint)
+# Sử dụng cấu trúc K8sMaxReplicas đã định nghĩa ở trên để áp dụng vào cluster thực tế
+# ------------------------------------------
 apiVersion: constraints.gatekeeper.sh/v1beta1
-kind: K8sMaxReplicas
+kind: K8sMaxReplicas         # Sử dụng đúng Kind đã khai báo ở Template phần 1
 metadata:
   name: max-replicas
   annotations:
+    # Sync Wave 2: Apply Ràng buộc ở Wave 2 (sau khi template đã sẵn sàng ở Wave 1)
     argocd.argoproj.io/sync-wave: "2"
 spec:
   match:
+    # Chỉ áp dụng ràng buộc này đối với tài nguyên thuộc loại Deployment (apiGroup: apps)
     kinds:
       - apiGroups: ["apps"]
         kinds: ["Deployment"]
+    # Phạm vi kiểm tra chỉ quét các Deployment nằm trong Namespace `demo`
     namespaces:
       - demo
   parameters:
+    # Cấu hình giá trị giới hạn thực tế là tối đa 5 Replicas
     maxReplicas: 5
+

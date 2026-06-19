@@ -1,17 +1,33 @@
-# ArgoCD App: Deploy Prometheus + Alertmanager + Grafana stack
+# ==============================================================================
+# FILE: argocd/apps/k8s-prometheus.yaml
+# MỤC ĐÍCH: Triển khai Prometheus, Alertmanager, Grafana stack để giám sát cụm.
+#
+# CÂU HỎI MENTOR CÓ THỂ HỎI:
+# 1. Q: Cấu hình `serviceMonitorSelectorNilUsesHelmValues: false` có ý nghĩa gì?
+#    A: Cho phép Prometheus tự động cào tất cả các ServiceMonitor trong cụm mà không cần khớp label của Helm release.
+# ==============================================================================
+
 apiVersion: argoproj.io/v1alpha1
+# kind định nghĩa loại tài nguyên là Application (quản lý bởi ArgoCD)
 kind: Application
 metadata:
-  name: kube-prometheus-stack
-  namespace: argocd
+  name: kube-prometheus-stack       # Tên ứng dụng trong ArgoCD
+  namespace: argocd                 # Namespace chạy ArgoCD
   annotations:
+    # sync-wave quyết định thứ tự deploy. Wave 0 chạy cùng đợt với Rollouts controller
     argocd.argoproj.io/sync-wave: "0"
 spec:
+  # project phân nhóm ứng dụng, 'default' là project mặc định
   project: default
+  # source khai báo nguồn cài đặt Helm chart của Prometheus stack
   source:
+    # repoURL chỉ định Helm registry chứa chart của Prometheus Community
     repoURL: https://prometheus-community.github.io/helm-charts
+    # chart chỉ định tên của Helm chart cần cài đặt
     chart: kube-prometheus-stack
+    # targetRevision chỉ định phiên bản của Helm chart (ở đây là 65.1.1)
     targetRevision: 65.1.1
+    # helm định cấu hình các tham số value đầu vào của Helm chart
     helm:
       values: |
         prometheus:
@@ -108,13 +124,19 @@ spec:
           alertmanagerSpec:
             secrets:
             - alertmanager-email
+  # destination chỉ định cụm Kubernetes đích để deploy
   destination:
+    # server trỏ tới API Server cụm nội bộ hiện tại
     server: https://kubernetes.default.svc
+    # namespace đích nơi cài đặt Prometheus stack (monitoring)
     namespace: monitoring
+  # syncPolicy khai báo chính sách đồng bộ tự động giữa Git và cụm
   syncPolicy:
     automated:
-      prune: true
-      selfHeal: true
+      prune: true                   # Tự động dọn dẹp các tài nguyên thừa
+      selfHeal: true                # Tự động tự sửa đổi cấu hình lệch Git
     syncOptions:
+    # Tự động tạo namespace 'monitoring' nếu chưa tồn tại
     - CreateNamespace=true
+    # Sử dụng Server-Side Apply để nạp các tài nguyên lớn (như CRDs của Prometheus)
     - ServerSideApply=true

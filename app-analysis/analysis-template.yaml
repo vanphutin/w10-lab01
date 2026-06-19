@@ -1,4 +1,17 @@
-# AnalysisTemplate: Tự chấm canary bằng success rate
+# ==============================================================================
+# FILE: app-analysis/analysis-template.yaml
+# MỤC ĐÍCH: Định nghĩa tiêu chí đánh giá tự động (AnalysisTemplate) chất lượng phiên bản Canary bằng cách truy vấn dữ liệu từ Prometheus.
+#
+# CÂU HỎI MENTOR CÓ THỂ HỎI:
+# 1. Q: Hãy giải thích ý nghĩa hàm `rate(...[2m])` và phép chia trong câu truy vấn PromQL.
+#    A: `rate(...[2m])` tính tốc độ tăng trưởng trung bình mỗi giây của request trong cửa sổ trượt 2 phút gần nhất.
+#       Phép chia lấy tổng tốc độ request thành công (không phải 5xx) chia cho tổng toàn bộ request nhận vào để ra tỉ lệ thành công.
+# 2. Q: Điều gì xảy ra nếu hệ thống không có traffic chạy qua (0 request)? Làm thế nào để xử lý trường hợp này?
+#    A: Nếu không có request, mẫu số bằng 0, phép chia trả về rỗng (No Data), có thể làm cho rollout bị fail/rollback.
+#       Ta có thể sửa query để trả về mặc định `1` khi mẫu số bằng `0` (dùng `or vector(1)`) hoặc cấu hình `noDataPolicy: Ignore`.
+# ==============================================================================
+
+
 apiVersion: argoproj.io/v1alpha1
 kind: AnalysisTemplate
 metadata:
@@ -6,16 +19,27 @@ metadata:
   namespace: demo
 spec:
   metrics:
+  # Tên định danh của metric đánh giá
   - name: success-rate
+    # Tần suất kiểm tra: Cứ mỗi 30 giây, Argo Rollouts sẽ chạy query Prometheus một lần
     interval: 30s
+    # Điều kiện thành công: Kết quả trả về của query (PromQL) phải lớn hơn hoặc bằng 0.90 (tức tỷ lệ thành công >= 90%)
     successCondition: result >= 0.90
+    # Số lần thất bại tối đa được phép trước khi Rollout bị đánh dấu là FAIL và kích hoạt Rollback tự động (10 lần liên tiếp)
     failureLimit: 10
+    # Cung cấp cấu hình nguồn dữ liệu truy vấn
     provider:
       prometheus:
+        # Địa chỉ URL của dịch vụ Prometheus chạy trong cụm (Namespace monitoring)
         address: http://kube-prometheus-stack-prometheus.monitoring.svc:9090
+        # Truy vấn PromQL để tính toán tỉ lệ thành công của các request HTTP trong 2 phút gần nhất
+        # - Tử số: Tổng tốc độ (rate) request thành công (không có mã lỗi 5xx - status!~"5..") của ứng dụng `api` trong namespace `demo`
+        # - Mẫu số: Tổng tốc độ (rate) tất cả các request của ứng dụng `api` trong namespace `demo`
+        # - Kết quả là tỉ lệ số thực nằm trong khoảng [0.0, 1.0]
         query: |
           scalar(
             sum(rate(flask_http_request_duration_seconds_count{namespace="demo",app="api",status!~"5.."}[2m]))
             /
             sum(rate(flask_http_request_duration_seconds_count{namespace="demo",app="api"}[2m]))
           )
+

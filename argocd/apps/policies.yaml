@@ -1,23 +1,45 @@
+# ==============================================================================
+# FILE: argocd/apps/policies.yaml
+# MỤC ĐÍCH: Deploy ClusterImagePolicy để cấu hình kiểm tra chữ ký số Cosign.
+#
+# CÂU HỎI MENTOR CÓ THỂ HỎI:
+# 1. Q: Tại sao App này lại có sync-wave là "4"?
+#    A: Để đảm bảo Sigstore Policy Controller (Wave -1) đã chạy ổn định trước khi áp dụng chính sách ký số.
+# ==============================================================================
+# apiVersion định nghĩa API group và version của tài nguyên ArgoCD Application
 apiVersion: argoproj.io/v1alpha1
+# kind định nghĩa loại tài nguyên là Application (quản lý bởi ArgoCD)
 kind: Application
 metadata:
-  name: policies
-  namespace: argocd
+  name: policies                    # Tên ứng dụng trong ArgoCD
+  namespace: argocd                 # Namespace chạy ArgoCD
   annotations:
+    # sync-wave quyết định thứ tự deploy. Wave 4 chạy muộn cùng lúc với ESO config
     argocd.argoproj.io/sync-wave: "4"
 spec:
+  # project phân nhóm ứng dụng, 'default' là project mặc định
   project: default
+  # source khai báo nguồn chứa tệp chính sách ký số ClusterImagePolicy
   source:
+    # repoURL chỉ định kho lưu trữ Git chứa chính sách
     repoURL: https://github.com/vanphutin/w10-lab01.git
+    # path trỏ tới thư mục chứa các tệp ClusterImagePolicy
     path: policies
+    # targetRevision chỉ định nhánh Git (ở đây là main)
     targetRevision: main
+  # destination chỉ định cụm Kubernetes đích để deploy
   destination:
+    # server trỏ tới API Server cụm nội bộ hiện tại
     server: https://kubernetes.default.svc
+    # namespace đích nơi áp dụng chính sách ký số (ở đây là cosign-system)
     namespace: cosign-system
+  # syncPolicy khai báo chính sách đồng bộ tự động giữa Git và cụm
   syncPolicy:
     automated:
-      prune: true
-      selfHeal: true
+      prune: true                   # Tự động xóa các chính sách cũ nếu chúng bị xóa khỏi Git
+      selfHeal: true                # Tự động sửa lại nếu cấu hình dưới cụm bị sửa lệch Git
     syncOptions:
+      # Sử dụng Server-Side Apply để nạp các tài nguyên cấu hình lớn
       - ServerSideApply=true
+      # Bỏ qua DryRun nếu chưa định nghĩa sẵn CRD để tránh lỗi đồng bộ
       - SkipDryRunOnMissingResource=true

@@ -1,27 +1,51 @@
+# ==============================================================================
+# FILE: argocd/apps/eso.yaml
+# MỤC ĐÍCH: Cài đặt Helm chart của External Secrets Operator cấp cụm.
+#
+# CÂU HỎI MENTOR CÓ THỂ HỎI:
+# 1. Q: Tham số `installCRDs: "true"` có vai trò gì?
+#    A: Yêu cầu Helm cài đặt các Custom Resource Definitions (CRDs) cần thiết của ESO như SecretStore, ExternalSecret.
+# ==============================================================================
+# apiVersion định nghĩa API group và version của tài nguyên ArgoCD Application
 apiVersion: argoproj.io/v1alpha1
+# kind định nghĩa loại tài nguyên là Application (quản lý bởi ArgoCD)
 kind: Application
 metadata:
-  name: external-secrets-operator
-  namespace: argocd
+  name: external-secrets-operator   # Tên ứng dụng trong ArgoCD
+  namespace: argocd                 # Namespace chạy ArgoCD
   annotations:
+    # sync-wave quyết định thứ tự deploy. Wave -1 chạy trước để cài đặt Operator
     argocd.argoproj.io/sync-wave: "-1"
 spec:
+  # project phân nhóm ứng dụng, 'default' là project mặc định
   project: default
+  # source khai báo nguồn cài đặt Helm chart của External Secrets Operator
   source:
+    # repoURL chỉ định Helm registry lưu trữ chart
     repoURL: https://charts.external-secrets.io
+    # chart chỉ định tên của Helm chart cần cài đặt
     chart: external-secrets
+    # targetRevision chỉ định phiên bản cụ thể của Helm chart (ở đây là 0.9.19)
     targetRevision: 0.9.19
+    # helm định cấu hình các tham số value đầu vào của Helm chart
     helm:
       parameters:
+        # installCRDs=true tự động cài đặt các Custom Resource Definition của operator
         - name: installCRDs
           value: "true"
+  # destination chỉ định cụm Kubernetes đích để deploy
   destination:
+    # server trỏ tới endpoint API Server của cụm nội bộ hiện tại
     server: https://kubernetes.default.svc
+    # namespace đích nơi cài đặt Operator pods
     namespace: external-secrets
+  # syncPolicy khai báo chính sách đồng bộ tự động
   syncPolicy:
     automated:
-      prune: true
-      selfHeal: true
+      prune: true                   # Tự động dọn dẹp các tài nguyên thừa
+      selfHeal: true                # Tự động tự sửa lỗi cấu hình lệch Git
     syncOptions:
+      # Tự động tạo namespace đích 'external-secrets' nếu chưa có
       - CreateNamespace=true
+      # Sử dụng Server-Side Apply để nạp các tài nguyên lớn (như CRDs của ESO)
       - ServerSideApply=true

@@ -1,18 +1,30 @@
-# Service: Expose API pods
-# Sync wave 1: Expose pods sau khi Rollout đã tạo
+# ==============================================================================
+# FILE: app-api/service.yaml
+# MỤC ĐÍCH: Expose các Pod của ứng dụng API để các thành phần bên trong cụm (như Prometheus, Ingress) có thể truy cập qua một địa chỉ IP tĩnh (ClusterIP).
+#
+# CÂU HỎI MENTOR CÓ THỂ HỎI:
+# 1. Q: Tại sao `sync-wave` của Service được đặt là "1", trễ hơn Rollout ("0")?
+#    A: Service cần có Pods chạy thực sự trước để liên kết đầu cuối (endpoints). Đặt Service ở Wave 1 giúp
+#       đảm bảo khi Service khởi tạo thì Rollout Controller đã tạo lập các đối tượng Pod cần thiết ở Wave 0.
+# ==============================================================================
+
+
 apiVersion: v1
 kind: Service
 metadata:
-  name: api
-  namespace: demo
+  name: api              # Tên của Service
+  namespace: demo        # Namespace phải khớp với Rollout
   labels:
-    app: api
+    app: api             # Nhãn nhận dạng của Service
   annotations:
+    # Sync Wave 1: Khởi tạo Service ở Wave 1 (sau khi Pods ở Wave 0 đã được tạo lập)
     argocd.argoproj.io/sync-wave: "1"
 spec:
+  # Selector quyết định traffic được chuyển đến các Pod có nhãn `app: api`
   selector:
     app: api
   ports:
-  - name: http
-    port: 80
-    targetPort: 8080
+  - name: http           # Tên cổng dịch vụ
+    port: 80             # Cổng bên ngoài của Service (client truy cập qua cổng 80)
+    targetPort: 8080     # Cổng thực tế ứng dụng Flask lắng nghe bên trong Pod (8080)
+

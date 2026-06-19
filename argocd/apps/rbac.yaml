@@ -1,23 +1,44 @@
-# ArgoCD App: Deploy RBAC (Roles and RoleBindings)
+# ==============================================================================
+# FILE: argocd/apps/rbac.yaml
+# MỤC ĐÍCH: Deploy các tài nguyên Roles và RoleBindings để phân quyền.
+#
+# CÂU HỎI MENTOR CÓ THỂ HỎI:
+# 1. Q: Tại sao RBAC có sync-wave là "1"?
+#    A: RBAC cần được thiết lập trước khi deploy ứng dụng (Wave 2) để đảm bảo quyền hạn được áp dụng đúng lúc.
+# ==============================================================================
+
+# apiVersion định nghĩa API group và version của tài nguyên ArgoCD Application
 apiVersion: argoproj.io/v1alpha1
+# kind định nghĩa loại tài nguyên là Application (quản lý bởi ArgoCD)
 kind: Application
 metadata:
-  name: rbac
-  namespace: argocd
+  name: rbac                        # Tên định danh của ứng dụng trong ArgoCD
+  namespace: argocd                 # Namespace chạy ArgoCD
   annotations:
+    # sync-wave quyết định thứ tự deploy. Wave 1 chạy sau Wave 0 (các operator)
     argocd.argoproj.io/sync-wave: "1"
 spec:
+  # project phân nhóm ứng dụng, 'default' là project mặc định
   project: default
+  # source khai báo nguồn chứa các tài nguyên RBAC (Roles, RoleBindings)
   source:
+    # repoURL chỉ định kho lưu trữ Git chứa cấu hình
     repoURL: https://github.com/vanphutin/w10-lab01.git
+    # path trỏ tới thư mục chứa các tài nguyên rbac trong repo
     path: rbac
+    # targetRevision chỉ định nhánh Git (ở đây là main)
     targetRevision: main
+  # destination chỉ định cụm Kubernetes đích để deploy
   destination:
+    # server trỏ tới API Server cụm nội bộ hiện tại
     server: https://kubernetes.default.svc
+    # namespace đích nơi áp dụng RBAC (demo)
     namespace: demo
+  # syncPolicy khai báo chính sách đồng bộ tự động giữa Git và cụm
   syncPolicy:
     automated:
-      prune: true
-      selfHeal: true
+      prune: true                   # Tự động xóa các tài nguyên thừa nếu chúng bị xóa khỏi Git
+      selfHeal: true                # Tự động sửa lại nếu cấu hình dưới cụm bị sửa lệch Git
     syncOptions:
+    # Sử dụng Server-Side Apply để tránh lỗi giới hạn kích thước khi cập nhật tài nguyên lớn
     - ServerSideApply=true

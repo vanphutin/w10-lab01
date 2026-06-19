@@ -1,27 +1,50 @@
-# ArgoCD App: Deploy Argo Rollouts controller + CRDs
+# ==============================================================================
+# FILE: argocd/apps/k8s-rollout.yaml
+# MỤC ĐÍCH: Cài đặt Argo Rollouts Controller để hỗ trợ Progressive Delivery (Canary).
+#
+# CÂU HỎI MENTOR CÓ THỂ HỎI:
+# 1. Q: Option `ignoreDifferences` trong App này giải quyết vấn đề gì?
+#    A: Tránh việc ArgoCD báo trạng thái OutOfSync giả do các trường tự sinh hoặc do controller khác biến đổi (như clusterIP).
+# ==============================================================================
+
+# apiVersion định nghĩa API group và version của tài nguyên ArgoCD Application
 apiVersion: argoproj.io/v1alpha1
+# kind định nghĩa loại tài nguyên là Application (quản lý bởi ArgoCD)
 kind: Application
 metadata:
-  name: argo-rollouts
-  namespace: argocd
+  name: argo-rollouts               # Tên định danh của ứng dụng trong ArgoCD
+  namespace: argocd                 # Namespace chạy ArgoCD
   annotations:
+    # sync-wave quyết định thứ tự deploy. Wave 0 chạy cùng đợt với Prometheus stack
     argocd.argoproj.io/sync-wave: "0"
 spec:
+  # project phân nhóm ứng dụng, 'default' là project mặc định
   project: default
+  # source khai báo nguồn cài đặt Helm chart của Argo Rollouts
   source:
+    # repoURL chỉ định kho Helm repo chứa chart
     repoURL: https://argoproj.github.io/argo-helm
+    # chart chỉ định tên của Helm chart cần cài đặt
     chart: argo-rollouts
+    # targetRevision chỉ định phiên bản cụ thể của chart (ở đây là 2.37.7)
     targetRevision: 2.37.7
+  # destination chỉ định cụm Kubernetes đích để deploy
   destination:
+    # server trỏ tới API Server cụm nội bộ hiện tại
     server: https://kubernetes.default.svc
+    # namespace đích nơi cài đặt Rollout controller
     namespace: argo-rollouts
+  # syncPolicy khai báo chính sách đồng bộ tự động
   syncPolicy:
     automated:
-      prune: true
-      selfHeal: true
+      prune: true                   # Tự động dọn dẹp tài nguyên thừa
+      selfHeal: true                # Tự động sửa lại nếu cấu hình dưới cụm bị sửa lệch Git
     syncOptions:
+    # Tự động tạo namespace đích 'argo-rollouts' nếu chưa có
     - CreateNamespace=true
+    # Sử dụng Server-Side Apply để nạp các tài nguyên lớn (như CRDs của Rollout)
     - ServerSideApply=true
+  # ignoreDifferences cấu hình bỏ qua những khác biệt động tự sinh ra dưới cụm để tránh lỗi trạng thái đồng bộ
   ignoreDifferences:
   - group: apps
     kind: Deployment

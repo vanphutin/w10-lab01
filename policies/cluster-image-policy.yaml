@@ -1,14 +1,34 @@
+# ==============================================================================
+# FILE: policies/cluster-image-policy.yaml
+# MỤC ĐÍCH: Khai báo chính sách xác thực chữ ký số trên toàn Cluster đối với các image cụ thể bằng khóa công khai (Public Key) của Cosign.
+#
+# CÂU HỎI MENTOR CÓ THỂ HỎI:
+# 1. Q: Cơ chế hoạt động của Webhook Sigstore khi chặn ảnh chưa ký là gì?
+#    A: Khi API Server nhận yêu cầu tạo Pod, nó gọi admission webhook `policy.sigstore.dev`. Webhook này kéo chữ ký của ảnh từ GHCR,
+#       dùng khóa công khai khai báo trong ClusterImagePolicy để xác minh. Nếu chữ ký không hợp lệ hoặc không có, Pod bị REJECT.
+# 2. Q: Tại sao chúng ta lại chỉ cấu hình áp dụng cho glob `ghcr.io/vanphutin/w10-api*`?
+#    A: Tránh việc chặn các ảnh hệ thống cốt lõi (như kube-proxy, prometheus, argocd, calico) không thuộc quyền quản lý và ký số của ta.
+# ==============================================================================
+
+
 apiVersion: policy.sigstore.dev/v1beta1
+# Loại tài nguyên kiểm tra ảnh container cấp cụm của Sigstore Policy Controller
 kind: ClusterImagePolicy
 metadata:
   name: api-image-policy
 spec:
+  # Danh sách các pattern (glob) ảnh container chịu sự áp dụng của chính sách này.
+  # Tất cả ảnh bắt đầu với "ghcr.io/vanphutin/w10-api" đều phải xác minh chữ ký.
   images:
     - glob: "ghcr.io/vanphutin/w10-api*"
+  # Khai báo nhà xác thực (Authorities)
   authorities:
     - key:
+        # Khóa công khai dùng để giải mã và xác thực chữ ký đi kèm ảnh.
+        # Khóa này khớp với khóa bí mật được dùng để ký số trong CI pipeline.
         data: |
           -----BEGIN PUBLIC KEY-----
           MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEUNVP/fjkOOC6vbLMqVUxD2G6sVMr
           o4acacttO6gr0T+GinrHxBr+5aHNoal4bjiRdkXMMkAfDWVgMnOFExKOBw==
           -----END PUBLIC KEY-----
+

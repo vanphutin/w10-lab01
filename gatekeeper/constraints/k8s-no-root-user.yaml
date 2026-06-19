@@ -1,8 +1,26 @@
+# ==============================================================================
+# FILE: gatekeeper/constraints/k8s-no-root-user.yaml
+# MỤC ĐÍCH: Ngăn chặn việc chạy các Pod dưới quyền Root (User ID = 0) ở cả cấp độ Pod và Container để giảm thiểu rủi ro bị tấn công leo thang đặc quyền bảo mật.
+#
+# CÂU HỎI MENTOR CÓ THỂ HỎI:
+# 1. Q: Tại sao việc chạy container bằng quyền root lại nguy hiểm?
+#    A: Nếu hacker khai thác được một lỗ hổng thực thi mã độc trong container chạy dưới quyền root, họ có thể dễ dàng thoát khỏi container
+#       (container breakout) và chiếm toàn bộ quyền kiểm soát node vật lý bên dưới.
+# 2. Q: Tại sao luật check runAsUser cần phải viết ở cả 2 khối vi phạm cấp Pod và cấp Container?
+#    A: Vì Kubernetes cho phép khai báo `securityContext` ở cấp độ Pod (áp dụng chung cho tất cả container)
+#       hoặc ghi đè riêng ở cấp độ từng Container. Do đó ta phải check cả 2 cấp độ để tránh lỗ hổng cấu hình.
+# ==============================================================================
+
+
+# ------------------------------------------
+# PHẦN 1: ĐỊNH NGHĨA KHUÔN MẪU CHÍNH SÁCH
+# ------------------------------------------
 apiVersion: templates.gatekeeper.sh/v1
 kind: ConstraintTemplate
 metadata:
   name: k8spspanonymoususers
   annotations:
+    # Sync Wave 1: Đăng ký định nghĩa CRD ở Wave 1
     argocd.argoproj.io/sync-wave: "1"
 spec:
   crd:
@@ -14,24 +32,30 @@ spec:
       rego: |
         package k8spspanonymoususers
 
+        # Luật vi phạm số 1: Kiểm tra cấu hình runAsUser ở cấp độ Pod
+        # Nếu cấu hình `securityContext.runAsUser` của toàn bộ Pod bằng 0 (root) thì báo lỗi vi phạm.
         violation[{"msg": msg}] {
-          # Check pod level security context
           input.review.object.spec.securityContext.runAsUser == 0
           msg := "Pod securityContext runAsUser cannot be 0 (root)."
         }
 
+        # Luật vi phạm số 2: Kiểm tra cấu hình runAsUser ở cấp độ từng Container
+        # Duyệt qua từng container, nếu có bất cứ container nào cấu hình `runAsUser` bằng 0 (root) thì báo lỗi vi phạm.
         violation[{"msg": msg}] {
-          # Check container level security context
           container := input.review.object.spec.containers[_]
           container.securityContext.runAsUser == 0
           msg := sprintf("Container '%v' securityContext runAsUser cannot be 0 (root).", [container.name])
         }
 ---
+# ------------------------------------------
+# PHẦN 2: ÁP DỤNG RÀNG BUỘC THỰC TẾ
+# ------------------------------------------
 apiVersion: constraints.gatekeeper.sh/v1beta1
 kind: K8sPSPAnonymousUsers
 metadata:
   name: no-root-user
   annotations:
+    # Sync Wave 2: Áp dụng ràng buộc ở Wave 2
     argocd.argoproj.io/sync-wave: "2"
 spec:
   match:
@@ -40,3 +64,4 @@ spec:
         kinds: ["Pod"]
     namespaces:
       - demo
+

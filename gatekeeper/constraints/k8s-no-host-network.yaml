@@ -1,8 +1,26 @@
+# ==============================================================================
+# FILE: gatekeeper/constraints/k8s-no-host-network.yaml
+# MỤC ĐÍCH: Ngăn chặn các Pod trong namespace demo kết nối trực tiếp vào network stack của host node để bảo vệ an ninh mạng của cụm.
+#
+# CÂU HỎI MENTOR CÓ THỂ HỎI:
+# 1. Q: Tại sao thuộc tính `hostNetwork: true` lại nguy hiểm đối với bảo mật Kubernetes?
+#    A: Cho phép Pod kết nối trực tiếp vào interface mạng vật lý của host node. Pod có thể sniff traffic của toàn bộ host node,
+#       truy cập vào metadata service của cloud provider, hoặc truy cập các cổng nội bộ của node mà bình thường không được phép.
+# 2. Q: Làm thế nào để test chính sách này hoạt động?
+#    A: Cố gắng deploy một Pod khai báo `hostNetwork: true` trong namespace `demo`. Gatekeeper sẽ ngay lập tức reject
+#       và trả về thông báo lỗi "Using hostNetwork is forbidden."
+# ==============================================================================
+
+
+# ------------------------------------------
+# PHẦN 1: ĐỊNH NGHĨA KHUÔN MẪU CHÍNH SÁCH
+# ------------------------------------------
 apiVersion: templates.gatekeeper.sh/v1
 kind: ConstraintTemplate
 metadata:
   name: k8snohostnetwork
   annotations:
+    # Sync Wave 1: Đăng ký định nghĩa CRD ở Wave 1
     argocd.argoproj.io/sync-wave: "1"
 spec:
   crd:
@@ -14,21 +32,30 @@ spec:
       rego: |
         package k8snohostnetwork
 
+        # Luật vi phạm (violation): 
+        # Nếu trường `hostNetwork` trong đặc tả Pod được đặt bằng `true`, kích hoạt vi phạm và từ chối deploy.
         violation[{"msg": msg}] {
           input.review.object.spec.hostNetwork == true
           msg := "Using hostNetwork is forbidden."
         }
 ---
+# ------------------------------------------
+# PHẦN 2: ÁP DỤNG RÀNG BUỘC THỰC TẾ
+# ------------------------------------------
 apiVersion: constraints.gatekeeper.sh/v1beta1
 kind: K8sNoHostNetwork
 metadata:
   name: no-host-network
   annotations:
+    # Sync Wave 2: Áp dụng ràng buộc ở Wave 2
     argocd.argoproj.io/sync-wave: "2"
 spec:
   match:
+    # Lọc đối tượng áp dụng là các Pod thuộc core API group (apiGroups: [""])
     kinds:
       - apiGroups: [""]
         kinds: ["Pod"]
+    # Phạm vi áp dụng chỉ trong Namespace `demo`
     namespaces:
       - demo
+

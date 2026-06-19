@@ -1,8 +1,26 @@
+# ==============================================================================
+# FILE: gatekeeper/constraints/k8s-no-latest-tag.yaml
+# MỤC ĐÍCH: Ngăn chặn việc chạy các image container không có phiên bản xác định rõ ràng (cấm sử dụng image tag `:latest`) để đảm bảo tính ổn định và bảo mật của production.
+#
+# CÂU HỎI MENTOR CÓ THỂ HỎI:
+# 1. Q: Tại sao việc sử dụng tag `:latest` lại bị cấm trong production?
+#    A: Tag `:latest` không chỉ định rõ phiên bản thực tế của code. Khi kéo image hoặc rollback, ta không thể biết
+#       chính xác code chạy là bản nào. Đồng thời, nó có thể làm phá vỡ tính nhất quán giữa các container instance trong cụm.
+# 2. Q: Làm thế nào Rego phát hiện được image không chỉ định tag?
+#    A: Thông qua hàm `is_latest(image) { not contains(image, ":") }`. Trong Kubernetes, nếu tên image không chứa dấu `:`
+#       thì Kubernetes API Server sẽ mặc định hiểu là tag `:latest`. Rego bắt được điều này và đánh dấu vi phạm.
+# ==============================================================================
+
+
+# ------------------------------------------
+# PHẦN 1: ĐỊNH NGHĨA KHUÔN MẪU CHÍNH SÁCH
+# ------------------------------------------
 apiVersion: templates.gatekeeper.sh/v1
 kind: ConstraintTemplate
 metadata:
   name: k8snolatesttag
   annotations:
+    # Sync Wave 1: Đăng ký định nghĩa CRD ở Wave 1
     argocd.argoproj.io/sync-wave: "1"
 spec:
   crd:
@@ -14,6 +32,9 @@ spec:
       rego: |
         package k8snolatesttag
 
+        # Quy tắc vi phạm (violation):
+        # Lặp qua tất cả các container trong danh sách của Pod (`containers[_]`)
+        # Lấy ra trường image và kiểm tra bằng hàm phụ `is_latest`
         violation[{"msg": msg}] {
           container := input.review.object.spec.containers[_]
           image := container.image
@@ -21,19 +42,25 @@ spec:
           msg := sprintf("Container '%v' is using the forbidden ':latest' tag.", [container.name])
         }
 
+        # Trường hợp 1: Nếu tên image không chứa ký tự ":" thì mặc định K8s sẽ tự động coi là tag ":latest" (vi phạm)
         is_latest(image) {
           not contains(image, ":")
         }
 
+        # Trường hợp 2: Nếu tên image kết thúc bằng ":latest" (vi phạm)
         is_latest(image) {
           endswith(image, ":latest")
         }
 ---
+# ------------------------------------------
+# PHẦN 2: ÁP DỤNG RÀNG BUỘC THỰC TẾ
+# ------------------------------------------
 apiVersion: constraints.gatekeeper.sh/v1beta1
 kind: K8sNoLatestTag
 metadata:
   name: no-latest-tag
   annotations:
+    # Sync Wave 2: Áp dụng ràng buộc ở Wave 2
     argocd.argoproj.io/sync-wave: "2"
 spec:
   match:
@@ -42,3 +69,4 @@ spec:
         kinds: ["Pod"]
     namespaces:
       - demo
+

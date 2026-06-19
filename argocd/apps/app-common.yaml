@@ -1,24 +1,46 @@
-# ArgoCD App: Deploy common resources (namespace)
+# ==============================================================================
+# FILE: argocd/apps/app-common.yaml
+# MỤC ĐÍCH: Khai báo ứng dụng ArgoCD tự động tạo namespace `demo` và các tài nguyên dùng chung.
+#
+# CÂU HỎI MENTOR CÓ THỂ HỎI:
+# 1. Q: Tại sao sync-wave của App này là "-1"?
+#    A: Namespace `demo` phải được tạo lập từ rất sớm để các ứng dụng khác có thể deploy vào đó ở các wave sau.
+# ==============================================================================
+
+# apiVersion định nghĩa API group và version của tài nguyên ArgoCD Application
 apiVersion: argoproj.io/v1alpha1
+# kind định nghĩa loại tài nguyên là Application (quản lý bởi ArgoCD)
 kind: Application
 metadata:
-  name: common
-  namespace: argocd
+  name: common                      # Tên định danh của ứng dụng trong ArgoCD
+  namespace: argocd                 # Phải nằm trong namespace cài đặt ArgoCD (argocd)
   annotations:
+    # sync-wave quyết định thứ tự deploy. Wave -1 chạy rất sớm để chuẩn bị namespace demo
     argocd.argoproj.io/sync-wave: "-1"
 spec:
+  # project phân nhóm ứng dụng, 'default' là project mặc định
   project: default
+  # source khai báo nguồn chứa các file manifest Kubernetes
   source:
+    # repoURL là đường dẫn đến kho lưu trữ Git chứa cấu hình
     repoURL: https://github.com/vanphutin/w10-lab01.git
+    # path chỉ định thư mục cụ thể trong repo chứa manifest cần deploy (Namespace definition)
     path: app-common
+    # targetRevision chỉ định nhánh Git hoặc tag Git cần đồng bộ (ở đây là main)
     targetRevision: main
+  # destination chỉ định cụm Kubernetes đích để deploy
   destination:
+    # server trỏ tới endpoint API Server của cụm nội bộ hiện tại
     server: https://kubernetes.default.svc
+    # namespace đích nơi tài nguyên trong app-common sẽ được tạo ra
     namespace: demo
+  # syncPolicy khai báo chính sách đồng bộ tự động giữa Git và cụm
   syncPolicy:
     automated:
-      prune: true
-      selfHeal: true
+      prune: true                   # Tự động xóa các tài nguyên dưới cụm nếu chúng bị xóa khỏi Git
+      selfHeal: true                # Tự động sửa/đồng bộ lại nếu tài nguyên dưới cụm bị sửa đổi lệch Git
     syncOptions:
+    # Cho phép tự động tạo namespace đích nếu namespace đó chưa tồn tại
     - CreateNamespace=true
+    # Sử dụng Server-Side Apply để tránh lỗi kích thước giới hạn khi update các resource lớn
     - ServerSideApply=true

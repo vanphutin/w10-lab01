@@ -1,18 +1,37 @@
-# ServiceMonitor: Prometheus scrape metrics từ API pods
+# ==============================================================================
+# FILE: app-api/servicemonitor.yaml
+# MỤC ĐÍCH: Định nghĩa cấu hình cho Prometheus Operator biết cách tự động cào (scrape) các thông số (metrics) của ứng dụng từ Service.
+#
+# CÂU HỎI MENTOR CÓ THỂ HỎI:
+# 1. Q: Nếu đổi `port: http` thành một cổng số ví dụ `port: 8080` ở đây thì có hoạt động không?
+#    A: Không. Trong `ServiceMonitor`, trường `port` phải tham chiếu tới TÊN (name) của port được định nghĩa
+#       trong `Service` (ở đây là `name: http`), chứ không được viết trực tiếp số cổng của container.
+# 2. Q: `interval: 15s` có ảnh hưởng gì tới độ trễ khi phát hiện lỗi trong Canary?
+#    A: Prometheus cào dữ liệu mỗi 15 giây. Nếu interval quá lớn (ví dụ 5 phút), AnalysisTemplate sẽ nhận dữ liệu rất trễ,
+#       dẫn đến việc rollback chậm trễ khi có sự cố.
+# ==============================================================================
+
+
+# CRD thuộc Prometheus Operator để quản lý cấu hình scrape tự động
 apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
   name: api
   namespace: demo
   labels:
+    # Nhãn app: api giúp Prometheus lọc và liên kết ServiceMonitor này với Prometheus Instance
     app: api
   annotations:
+    # Sync Wave 2: Deploy cấu hình giám sát ở Wave 2 (sau khi Service đã sẵn sàng ở Wave 1)
     argocd.argoproj.io/sync-wave: "2"
 spec:
+  # Lọc các Service mục tiêu cần scrape. Ở đây nó sẽ quét các Service có nhãn `app: api`
   selector:
     matchLabels:
       app: api
+  # Định nghĩa các endpoint thu thập metrics
   endpoints:
-  - port: http
-    path: /metrics
-    interval: 15s
+  - port: http           # Tên cổng trên Service cần scrape (phải khớp với tên cổng `http` trong service.yaml)
+    path: /metrics       # Đường dẫn chứa dữ liệu metrics chuẩn Prometheus xuất ra từ thư viện Flask
+    interval: 15s        # Tần suất cào dữ liệu (mỗi 15 giây cào một lần)
+

@@ -1,8 +1,26 @@
+# ==============================================================================
+# FILE: gatekeeper/constraints/k8s-require-resources.yaml
+# MỤC ĐÍCH: Yêu cầu mọi Pod deploy trong namespace demo phải định nghĩa giới hạn tài nguyên (limits) cho cả CPU và Memory để tránh gây nghẽn và treo cụm.
+#
+# CÂU HỎI MENTOR CÓ THỂ HỎI:
+# 1. Q: Tại sao chính sách này chỉ bắt buộc khai báo `limits` mà không bắt buộc `requests`?
+#    A: `limits` (giới hạn trần) là yếu tố quyết định để ngăn chặn một container bị lỗi rò rỉ bộ nhớ (memory leak)
+#       hoặc loop CPU ngốn sạch tài nguyên của Host Node làm ảnh hưởng các Pod khác. Do đó, việc bảo vệ cụm cần ưu tiên limits trước.
+# 2. Q: Nếu một Pod chỉ cấu hình limit cho Memory mà quên cấu hình limit CPU thì có bị chặn không?
+#    A: Có. Hàm helper `has_limits` yêu cầu cả 2 trường `cpu` và `memory` phải tồn tại đồng thời.
+#       Nếu thiếu 1 trong 2, biểu thức `not has_limits(container)` sẽ trả về true và kích hoạt lỗi vi phạm.
+# ==============================================================================
+
+
+# ------------------------------------------
+# PHẦN 1: ĐỊNH NGHĨA KHUÔN MẪU CHÍNH SÁCH
+# ------------------------------------------
 apiVersion: templates.gatekeeper.sh/v1
 kind: ConstraintTemplate
 metadata:
   name: k8scontainerlimits
   annotations:
+    # Sync Wave 1: Đăng ký định nghĩa CRD ở Wave 1
     argocd.argoproj.io/sync-wave: "1"
 spec:
   crd:
@@ -14,26 +32,37 @@ spec:
       rego: |
         package k8scontainerlimits
 
+        # Luật vi phạm (violation): Gọi hàm kiểm tra general_violation
         violation[{"msg": msg}] {
           general_violation[msg]
         }
 
+        # Định nghĩa hàm kiểm tra vi phạm tổng quát (general_violation):
+        # Lặp qua tất cả các container trong Pod, nếu container đó KHÔNG có khai báo limit tài nguyên 
+        # (phép `not has_limits(container)` là đúng) thì trả về thông báo lỗi vi phạm.
         general_violation[msg] {
           container := input.review.object.spec.containers[_]
           not has_limits(container)
           msg := sprintf("Container '%v' does not have CPU and/or Memory limits defined.", [container.name])
         }
 
+        # Hàm kiểm tra phụ has_limits:
+        # Kiểm tra xem thuộc tính `resources.limits.cpu` VÀ `resources.limits.memory` có tồn tại trong spec của container không.
+        # Nếu cả 2 đều tồn tại, hàm trả về true (hợp lệ).
         has_limits(container) {
           container.resources.limits.cpu
           container.resources.limits.memory
         }
 ---
+# ------------------------------------------
+# PHẦN 2: ÁP DỤNG RÀNG BUỘC THỰC TẾ
+# ------------------------------------------
 apiVersion: constraints.gatekeeper.sh/v1beta1
 kind: K8sContainerLimits
 metadata:
   name: require-resources
   annotations:
+    # Sync Wave 2: Áp dụng ràng buộc ở Wave 2
     argocd.argoproj.io/sync-wave: "2"
 spec:
   match:
@@ -42,3 +71,4 @@ spec:
         kinds: ["Pod"]
     namespaces:
       - demo
+

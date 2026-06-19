@@ -1,5 +1,13 @@
-# Lab 5: app-of-apps root
-# Root App: App of Apps pattern - quản lý tất cả child applications
+# ==============================================================================
+# FILE: argocd/root.yaml
+# MỤC ĐÍCH: Triển khai ứng dụng gốc theo mô hình App of Apps để quản lý tập trung toàn bộ tài nguyên.
+#
+# CÂU HỎI MENTOR CÓ THỂ HỎI:
+# 1. Q: Mô hình App of Apps hoạt động như thế nào?
+#    A: Chỉ cần deploy một ứng dụng duy nhất (`root`), ứng dụng này sẽ chỉ đến thư mục `argocd/apps`
+#       để tự động quét và sinh ra các ứng dụng con khác. Tránh việc phải quản lý thủ công từng App.
+# ==============================================================================
+
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:

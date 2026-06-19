@@ -1,46 +1,71 @@
-# 1. RoleBinding cho alice (developer) trong namespace demo
+# ==============================================================================
+# FILE: rbac/rolebindings.yaml
+# MỤC ĐÍCH: Gắn kết (Bind) các User cụ thể (alice, bob, carol) với các Vai trò tương ứng đã định nghĩa trong roles.yaml.
+#
+# CÂU HỎI MENTOR CÓ THỂ HỎI:
+# 1. Q: User `alice` có thể xem log hoặc tài nguyên của Pod trong namespace `default` được không?
+#    A: Không. Alice chỉ được gắn binding ở namespace `demo` thông qua `RoleBinding`. Mọi hành động thao tác tài nguyên
+#       ở các namespace khác bao gồm cả default sẽ bị Kubernetes API Server từ chối (forbidden).
+# 2. Q: Nếu ta muốn gán quyền xem toàn cụm của `viewer` nhưng chỉ giới hạn trong một namespace, ta làm thế nào?
+#    A: Ta có thể sử dụng `RoleBinding` trong namespace mong muốn đó nhưng `roleRef` vẫn trỏ tới `ClusterRole` là `viewer`.
+#       Kubernetes hỗ trợ cơ chế tái sử dụng ClusterRole cho các phạm vi namespace cụ thể.
+# ==============================================================================
+
+
+# ------------------------------------------
+# LIÊN KẾT 1: RoleBinding cho alice (developer) trong namespace `demo`
+# ------------------------------------------
 apiVersion: rbac.authorization.k8s.io/v1
+# RoleBinding gắn kết Role với Đối tượng trong phạm vi 1 namespace cụ thể
 kind: RoleBinding
 metadata:
   name: developer-binding
-  namespace: demo
+  namespace: demo        # Ràng buộc này chỉ có hiệu lực bên trong namespace `demo`
 subjects:
+  # Đối tượng được áp dụng (ở đây là User alice)
 - kind: User
   name: alice
   apiGroup: rbac.authorization.k8s.io
 roleRef:
+  # Vai trò được tham chiếu (Tham chiếu tới Role `developer`)
   kind: Role
   name: developer
   apiGroup: rbac.authorization.k8s.io
 
 ---
 
-# 2. ClusterRoleBinding cho bob (sre) trên toàn cluster
+# ------------------------------------------
+# LIÊN KẾT 2: ClusterRoleBinding cho bob (sre) trên toàn Cluster
+# ------------------------------------------
 apiVersion: rbac.authorization.k8s.io/v1
+# ClusterRoleBinding gắn kết ClusterRole với Đối tượng trên phạm vi toàn cụm (tất cả các namespace)
 kind: ClusterRoleBinding
 metadata:
-  name: sre-binding
+  name: sre-binding      # ClusterRoleBinding không cần chỉ định namespace
 subjects:
 - kind: User
-  name: bob
+  name: bob              # User bob nhận quyền SRE trên toàn bộ các namespace
   apiGroup: rbac.authorization.k8s.io
 roleRef:
   kind: ClusterRole
-  name: sre
+  name: sre              # Tham chiếu tới ClusterRole `sre`
   apiGroup: rbac.authorization.k8s.io
 
 ---
 
-# 3. ClusterRoleBinding cho carol (viewer) trên toàn cluster
+# ------------------------------------------
+# LIÊN KẾT 3: ClusterRoleBinding cho carol (viewer) trên toàn Cluster
+# ------------------------------------------
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
   name: viewer-binding
 subjects:
 - kind: User
-  name: carol
+  name: carol            # User carol nhận quyền chỉ đọc trên toàn cluster
   apiGroup: rbac.authorization.k8s.io
 roleRef:
   kind: ClusterRole
-  name: viewer
+  name: viewer           # Tham chiếu tới ClusterRole `viewer`
   apiGroup: rbac.authorization.k8s.io
+

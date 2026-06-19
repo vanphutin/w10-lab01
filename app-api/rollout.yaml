@@ -1,67 +1,116 @@
-# Rollout: Progressive delivery với canary strategy
-# Sync wave 0: Deploy trước để tạo pods
+# ==============================================================================
+# FILE: app-api/rollout.yaml
+# MỤC ĐÍCH: Khai báo tài nguyên Rollout của Argo Rollouts để thực hiện Progressive Delivery (Canary deployment).
+# Cấu hình chiến lược Canary (10% -> 50% -> 100%), gắn Secret mount volume và giới hạn tài nguyên CPU/RAM.
+#
+# CÂU HỎI MENTOR CÓ THỂ HỎI:
+# 1. Q: Tại sao chúng ta sử dụng `Rollout` thay vì `Deployment` mặc định của Kubernetes?
+#    A: Deployment mặc định chỉ hỗ trợ Recreate và RollingUpdate (không kiểm soát tốt traffic hoặc chạy analysis tự động).
+#       Rollout hỗ trợ Canary và Blue-Green, cho phép định tuyến traffic chi tiết và tích hợp phân tích thời gian thực.
+# 2. Q: Cơ chế xoay vòng Secret không restart Pod được triển khai như thế nào trong tệp này?
+#    A: Khai báo volume trỏ tới `api-db-secret` và gắn kết vào Pod qua `volumeMounts` tại `/etc/secrets`.
+#       Khi mật khẩu thay đổi trên AWS, ESO cập nhật Kubernetes Secret, Kubelet tự động ghi đè file mới vào container mà không restart Pod.
+# 3. Q: Ý nghĩa của thuộc tính `startingStep: 1` là gì?
+#    A: Bắt đầu chạy Analysis đánh giá ngay từ bước Canary đầu tiên (khi traffic mới là 10%). Nếu phiên bản mới lỗi nặng,
+#       hệ thống sẽ rollback ngay lập tức từ bước 10% này để bảo vệ 90% người dùng còn lại.
+# ==============================================================================
+
+
+# apiVersion định nghĩa group và version của Custom Resource Definition (CRD) do Argo Rollouts cài đặt
 apiVersion: argoproj.io/v1alpha1
+# Loại tài nguyên thay thế cho Deployment mặc định của Kubernetes nhằm hỗ trợ các chiến lược deploy nâng cao
 kind: Rollout
 metadata:
-  name: api
-  namespace: demo
+  name: api              # Tên của Rollout
+  namespace: demo        # Namespace nơi Rollout sẽ chạy
   labels:
-    app: api
+    app: api             # Nhãn dùng để định danh và liên kết các tài nguyên khác (như Service)
   annotations:
+    # Sync Wave 0: ArgoCD sẽ deploy tài nguyên này ở Wave 0 (sau Namespace ở Wave -1)
     argocd.argoproj.io/sync-wave: "0"
 spec:
+  # Số lượng replica (Pod) chạy đồng thời mong muốn ở trạng thái ổn định là 4 Pods
   replicas: 4
+  # Selector giúp Rollout Controller biết những Pod nào thuộc quyền quản lý của nó
   selector:
     matchLabels:
       app: api
+  # Template định nghĩa cấu trúc của Pod được sinh ra
   template:
     metadata:
       labels:
-        app: api
+        app: api         # Gán nhãn cho các Pod được sinh ra trùng khớp với selector ở trên
     spec:
       containers:
       - name: api
+        # Ảnh Docker đã được quét Trivy và ký bởi Cosign
         image: ghcr.io/vanphutin/w10-api:v0.0.1
-        imagePullPolicy: IfNotPresent
+        imagePullPolicy: IfNotPresent # Chỉ kéo ảnh từ Registry về nếu cục bộ chưa có
         ports:
-        - containerPort: 8080
+        - containerPort: 8080        # Port ứng dụng Flask lắng nghe bên trong container
           protocol: TCP
         env:
+        # Cấu hình biến môi trường VERSION truyền vào container
         - name: VERSION
           value: "v0.0.1"
+        # Cấu hình biến môi trường ERROR_RATE để giả lập lỗi (0.15 = 15% lỗi)
+        # Nếu tỉ lệ lỗi này > 10% (tức success rate < 90%), thuật toán Canary Analysis sẽ kích hoạt rollback tự động
         - name: ERROR_RATE
           value: "0.15"
+        
+        # Liveness Probe: Kiểm tra Pod còn sống hay không. Nếu endpoint /healthz trả về lỗi hoặc timeout, K8s sẽ restart Pod này.
         livenessProbe:
           httpGet:
             path: /healthz
             port: 8080
-          initialDelaySeconds: 5
+          initialDelaySeconds: 5     # Đợi 5 giây sau khi Pod khởi động rồi mới bắt đầu kiểm tra
+        
+        # Readiness Probe: Kiểm tra Pod đã sẵn sàng tiếp nhận traffic chưa. Nếu /healthz thành công, Pod mới được đẩy vào Service endpoints.
         readinessProbe:
           httpGet:
             path: /healthz
             port: 8080
-          initialDelaySeconds: 3
+          initialDelaySeconds: 3     # Đợi 3 giây sau khi Pod khởi động rồi mới bắt đầu kiểm tra
+        
+        # Resources Limits: Định nghĩa giới hạn tài nguyên tối đa Pod có thể tiêu thụ (OPA Gatekeeper bắt buộc điều này)
         resources:
           limits:
-            cpu: 200m
-            memory: 128Mi
+            cpu: 200m                # Giới hạn tối đa 0.2 Core CPU
+            memory: 128Mi            # Giới hạn tối đa 128 Megabytes RAM
+        
+        # Volume Mounts: Gắn kết secret vào thư mục hệ thống của container để đọc trực tiếp
         volumeMounts:
         - name: db-secrets
-          mountPath: /etc/secrets
-          readOnly: true
+          mountPath: /etc/secrets    # Thư mục chứa secret trong container. File password sẽ nằm ở `/etc/secrets/db-password`
+          readOnly: true             # Chỉ cho phép đọc, cấm chỉnh sửa từ bên trong Pod
+      
+      # Khai báo volume sử dụng Kubernetes Secret làm nguồn dữ liệu (được ESO đồng bộ tự động từ AWS Secrets Manager)
       volumes:
       - name: db-secrets
         secret:
-          secretName: api-db-secret
+          secretName: api-db-secret  # Tên K8s Secret được đồng bộ
+  
+  # Chiến lược deploy nâng cao (Canary)
   strategy:
     canary:
+      # Cấu hình phân tích chất lượng (Analysis) tự động trong quá trình deploy
       analysis:
         templates:
+        # Trỏ tới AnalysisTemplate có tên `success-rate` (định nghĩa trong app-analysis/analysis-template.yaml)
         - templateName: success-rate
+        # Bắt đầu chạy phân tích từ bước 1 của quá trình Canary (tức ngay khi setWeight: 10)
         startingStep: 1
+      
+      # Các bước triển khai Canary tăng dần traffic
       steps:
+      # Bước 1: Định tuyến 10% traffic sang phiên bản mới, 90% vẫn chạy phiên bản cũ
       - setWeight: 10
+      # Bước 2: Tạm dừng 2 phút để hệ thống thu thập metrics và chạy Analysis đánh giá
       - pause: {duration: 2m}
+      # Bước 3: Nếu Analysis thành công, tăng lượng traffic cho bản mới lên 50%
       - setWeight: 50
+      # Bước 4: Tiếp tục tạm dừng 2 phút để đánh giá độ ổn định ở tải cao hơn
       - pause: {duration: 2m}
+      # Bước 5: Hoàn tất deploy, chuyển 100% traffic sang phiên bản mới và dọn dẹp các Pod phiên bản cũ
       - setWeight: 100
+

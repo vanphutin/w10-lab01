@@ -1,23 +1,46 @@
+# ==============================================================================
+# FILE: argocd/apps/eso-config.yaml
+# MỤC ĐÍCH: Khai báo ứng dụng ArgoCD tự động deploy các file cấu hình kết nối AWS Secrets Manager (SecretStore, ExternalSecret).
+#
+# CÂU HỎI MENTOR CÓ THỂ HỎI:
+# 1. Q: Tại sao sync-wave của App này lại là "4" (rất muộn)?
+#    A: Để đảm bảo External Secrets Operator (Wave -1) đã cài đặt xong xuôi và định nghĩa đầy đủ các CRD
+#       thì ta mới deploy SecretStore và ExternalSecret để tránh lỗi "CRD not found".
+# ==============================================================================
+# apiVersion định nghĩa API group và version của tài nguyên ArgoCD Application
 apiVersion: argoproj.io/v1alpha1
+# kind định nghĩa loại tài nguyên là Application (quản lý bởi ArgoCD)
 kind: Application
 metadata:
-  name: external-secrets-config
-  namespace: argocd
+  name: external-secrets-config     # Tên định danh của ứng dụng trong ArgoCD
+  namespace: argocd                 # Phải nằm trong namespace cài đặt ArgoCD (argocd)
   annotations:
+    # sync-wave quyết định thứ tự deploy. Wave 4 chạy muộn nhất sau khi Operator đã sẵn sàng
     argocd.argoproj.io/sync-wave: "4"
 spec:
+  # project phân nhóm ứng dụng, 'default' là project mặc định
   project: default
+  # source khai báo nguồn chứa các file manifest Kubernetes
   source:
+    # repoURL là đường dẫn đến kho lưu trữ Git chứa cấu hình
     repoURL: https://github.com/vanphutin/w10-lab01.git
+    # path chỉ định thư mục cụ thể trong repo chứa manifest cần deploy (SecretStore, ExternalSecret)
     path: eso
+    # targetRevision chỉ định nhánh Git hoặc tag Git cần đồng bộ (ở đây là main)
     targetRevision: main
+  # destination chỉ định cụm Kubernetes đích để deploy
   destination:
+    # server trỏ tới endpoint API Server của cụm nội bộ hiện tại
     server: https://kubernetes.default.svc
+    # namespace đích nơi tài nguyên trong eso (SecretStore, ExternalSecret) sẽ được tạo ra
     namespace: demo
+  # syncPolicy khai báo chính sách đồng bộ tự động giữa Git và cụm
   syncPolicy:
     automated:
-      prune: true
-      selfHeal: true
+      prune: true                   # Tự động xóa các tài nguyên dưới cụm nếu chúng bị xóa khỏi Git
+      selfHeal: true                # Tự động sửa/đồng bộ lại nếu tài nguyên dưới cụm bị sửa đổi lệch Git
     syncOptions:
+      # Sử dụng Server-Side Apply để tránh lỗi kích thước giới hạn khi update các resource lớn
       - ServerSideApply=true
+      # Bỏ qua bước kiểm tra DryRun trên tài nguyên chưa định nghĩa CRD (tránh lỗi khi Operator chưa deploy xong)
       - SkipDryRunOnMissingResource=true

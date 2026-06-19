@@ -1,50 +1,81 @@
-# 3 role/clusterrole 
-# alice — developer: CRUD workload trong ns demo
+# ==============================================================================
+# FILE: rbac/roles.yaml
+# MỤC ĐÍCH: Định nghĩa các quyền truy cập (Role & ClusterRole) cho các nhóm vai trò nhân sự khác nhau theo nguyên tắc đặc quyền tối thiểu (Least Privilege).
+#
+# CÂU HỎI MENTOR CÓ THỂ HỎI:
+# 1. Q: Điểm khác biệt giữa `Role` và `ClusterRole` là gì?
+#    A: `Role` bị giới hạn trong một namespace cụ thể. `ClusterRole` không thuộc namespace nào, cho phép phân quyền trên các tài nguyên
+#       cấp cụm (như Nodes, Namespaces) hoặc áp dụng quyền đồng nhất trên toàn bộ các namespace trong cụm.
+# 2. Q: Tại sao tài nguyên Role và ClusterRole trong Kubernetes không có trường `spec:` giống như các tài nguyên khác?
+#    A: Đây là đặc thù thiết kế của API Kubernetes RBAC. Các luật phân quyền (`rules:`) được khai báo trực tiếp ở cấp cao nhất của manifest.
+# ==============================================================================
+
+
+# ------------------------------------------
+# VAI TRÒ 1: developer (Role cấp Namespace)
+# alice - Có toàn quyền quản lý tài nguyên ứng dụng trong phạm vi namespace `demo`.
+# ------------------------------------------
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
   name: developer
-  namespace: demo
+  namespace: demo        # Phạm vi áp dụng chỉ trong namespace demo
 rules:
+  # apiGroups: [""] đại diện cho Core API group của Kubernetes
 - apiGroups: [""]
+  # Danh sách các tài nguyên được phép thao tác
   resources: ["pods", "services", "configmaps", "secrets"]
+  # Danh sách các hành động được phép thực hiện
   verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  
+  # apiGroups: ["apps"] chứa các tài nguyên quản lý ứng dụng dạng workload
 - apiGroups: ["apps"]
   resources: ["deployments", "statefulsets", "daemonsets", "replicasets"]
   verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  
+  # apiGroups: ["networking.k8s.io"] chứa cấu hình mạng/định tuyến Ingress
 - apiGroups: ["networking.k8s.io"]
   resources: ["ingresses"]
   verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
 
 ---
 
-# bob — sre: Xem + thao tác pod toàn cụm
+# ------------------------------------------
+# VAI TRÒ 2: sre (ClusterRole cấp toàn cụm)
+# bob - Có quyền xem và quản lý hệ thống trên toàn cluster để debug và vận hành.
+# ------------------------------------------
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: sre
+  name: sre              # ClusterRole không thuộc namespace nào, áp dụng toàn cụm
 rules:
 - apiGroups: [""]
+  # Cho phép xem log (`pods/log`) và nhảy vào pod thực thi lệnh (`pods/exec`), xem node, sự kiện và danh sách namespace
   resources: ["pods", "pods/log", "pods/exec", "nodes", "events", "namespaces"]
   verbs: ["get", "list", "watch", "create", "update", "patch", "delete", "escalate", "bind"]
 - apiGroups: ["apps"]
   resources: ["deployments", "statefulsets", "daemonsets"]
   verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
 - apiGroups: ["argoproj.io"]
+  # Cho phép SRE giám sát và tương tác với tài nguyên Rollout của ArgoCD
   resources: ["rollouts"]
   verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
 
 ---
 
-# carol — viewer: Chỉ đọc toàn cụm
+# ------------------------------------------
+# VAI TRÒ 3: viewer (ClusterRole cấp toàn cụm)
+# carol - Quyền chỉ đọc (Read-Only) toàn bộ tài nguyên để giám sát.
+# ------------------------------------------
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
   name: viewer
 rules:
+  # Dấu "*" đại diện cho tất cả resources trong apiGroup đó
 - apiGroups: [""]
   resources: ["*"]
-  verbs: ["get", "list", "watch"]
+  verbs: ["get", "list", "watch"] # Chỉ có quyền đọc, không có quyền ghi/sửa/xóa
 - apiGroups: ["apps"]
   resources: ["*"]
   verbs: ["get", "list", "watch"]

@@ -1,23 +1,45 @@
+# ==============================================================================
+# FILE: argocd/apps/policy-controller.yaml
+# MỤC ĐÍCH: Cài đặt Sigstore Policy Controller dùng cho xác thực chữ ký ảnh.
+#
+# CÂU HỎI MENTOR CÓ THỂ HỎI:
+# 1. Q: Tại sao sync-wave của App này được đặt là "-1"?
+#    A: Đây là admission webhook bảo mật chuỗi cung ứng, cần chạy trước các Pod ứng dụng.
+# ==============================================================================
+# apiVersion định nghĩa API group và version của tài nguyên ArgoCD Application
 apiVersion: argoproj.io/v1alpha1
+# kind định nghĩa loại tài nguyên là Application (quản lý bởi ArgoCD)
 kind: Application
 metadata:
-  name: policy-controller
-  namespace: argocd
+  name: policy-controller             # Tên định danh của ứng dụng trong ArgoCD
+  namespace: argocd                   # Namespace chạy ArgoCD
   annotations:
+    # sync-wave quyết định thứ tự deploy. Wave -1 chạy trước các pod ứng dụng
     argocd.argoproj.io/sync-wave: "-1"
 spec:
+  # project phân nhóm ứng dụng, 'default' là project mặc định
   project: default
+  # source khai báo nguồn cài đặt Helm chart của Sigstore Policy Controller
   source:
+    # repoURL chỉ định Helm registry chứa chart
     repoURL: https://sigstore.github.io/helm-charts
+    # chart chỉ định tên của Helm chart cần cài đặt
     chart: policy-controller
+    # targetRevision chỉ định phiên bản cụ thể của chart (ở đây là 0.10.6)
     targetRevision: 0.10.6
+  # destination chỉ định cụm Kubernetes đích để deploy
   destination:
+    # server trỏ tới API Server cụm nội bộ hiện tại
     server: https://kubernetes.default.svc
+    # namespace đích nơi cài đặt Admission Controller (ở đây là cosign-system)
     namespace: cosign-system
+  # syncPolicy khai báo chính sách đồng bộ tự động
   syncPolicy:
     automated:
-      prune: true
-      selfHeal: true
+      prune: true                   # Tự động dọn dẹp tài nguyên thừa
+      selfHeal: true                # Tự động sửa lại cấu hình lệch Git
     syncOptions:
+      # Tự động tạo namespace đích 'cosign-system' nếu chưa có
       - CreateNamespace=true
+      # Sử dụng Server-Side Apply để nạp các tài nguyên lớn (như CRDs của Sigstore)
       - ServerSideApply=true
